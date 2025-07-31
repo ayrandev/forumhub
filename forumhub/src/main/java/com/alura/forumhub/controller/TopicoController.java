@@ -1,10 +1,12 @@
 package com.alura.forumhub.controller;
 
 import com.alura.forumhub.domain.topico.*;
+import com.alura.forumhub.domain.usuario.Usuario;
+import com.alura.forumhub.domain.curso.Curso;
 import com.alura.forumhub.dto.DadosCadastroTopico;
 import com.alura.forumhub.repository.TopicoRepository;
-import com.alura.forumhub.repository.AutorRepository;
 import com.alura.forumhub.repository.CursoRepository;
+import com.alura.forumhub.repository.UsuarioRepository;
 import jakarta.transaction.Transactional;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
@@ -12,7 +14,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 @RestController
@@ -20,18 +22,17 @@ import java.util.Optional;
 public class TopicoController {
 
     private final TopicoRepository repository;
-    private final AutorRepository autorRepository;
     private final CursoRepository cursoRepository;
+    private final UsuarioRepository usuarioRepository;
 
     public TopicoController(TopicoRepository repository,
-                            AutorRepository autorRepository,
+                            UsuarioRepository usuarioRepository,
                             CursoRepository cursoRepository) {
         this.repository = repository;
-        this.autorRepository = autorRepository;
+        this.usuarioRepository = usuarioRepository;
         this.cursoRepository = cursoRepository;
     }
 
-    // LISTAGEM COM FILTROS E PAGINAÇÃO
     @GetMapping
     public ResponseEntity<?> listar(
             @PageableDefault(size = 10, sort = "dataCriacao") Pageable paginacao,
@@ -52,31 +53,30 @@ public class TopicoController {
         return ResponseEntity.ok(topicos);
     }
 
-    // DETALHAMENTO POR ID
     @GetMapping("/{id}")
     public ResponseEntity<DadosDetalhamentoTopico> detalhar(@PathVariable @NotNull Long id) {
         Optional<Topico> topico = repository.findById(id);
-        if (topico.isPresent()) {
-            return ResponseEntity.ok(new DadosDetalhamentoTopico(topico.get()));
-        }
-        return ResponseEntity.notFound().build();
+        return topico.map(value -> ResponseEntity.ok(new DadosDetalhamentoTopico(value)))
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
-    // CADASTRO DE NOVO TÓPICO
     @PostMapping
     @Transactional
     public ResponseEntity<DadosDetalhamentoTopico> cadastrar(@RequestBody @Valid DadosCadastroTopico dados) {
-        var autorOptional = autorRepository.findById(dados.idAutor());
-        var cursoOptional = cursoRepository.findById(dados.idCurso());
+        Optional<Usuario> usuarioOptional = usuarioRepository.findById(dados.idAutor());
+        Optional<Curso> cursoOptional = cursoRepository.findById(dados.idCurso());
 
-        if (autorOptional.isEmpty() || cursoOptional.isEmpty()) {
+        if (usuarioOptional.isEmpty() || cursoOptional.isEmpty()) {
             return ResponseEntity.badRequest().build();
         }
 
         Topico topico = new Topico(
+                null,
                 dados.titulo(),
                 dados.mensagem(),
-                autorOptional.get(),
+                LocalDateTime.now(),
+                StatusTopico.NAO_RESPONDIDO,
+                usuarioOptional.get(),
                 cursoOptional.get()
         );
 
@@ -85,7 +85,6 @@ public class TopicoController {
         return ResponseEntity.status(201).body(new DadosDetalhamentoTopico(topico));
     }
 
-    // ATUALIZAÇÃO DE TÓPICO
     @PutMapping("/{id}")
     @Transactional
     public ResponseEntity<DadosDetalhamentoTopico> atualizar(@PathVariable Long id,
@@ -103,7 +102,6 @@ public class TopicoController {
         return ResponseEntity.notFound().build();
     }
 
-    // EXCLUSÃO DE TÓPICO
     @DeleteMapping("/{id}")
     @Transactional
     public ResponseEntity<Void> excluir(@PathVariable Long id) {
@@ -116,5 +114,4 @@ public class TopicoController {
 
         return ResponseEntity.notFound().build();
     }
-
 }
